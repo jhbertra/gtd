@@ -1,20 +1,28 @@
 module Gtd
     ( InItem(..)
     , InList
-    , addToInList
-    , empty
-    , findById
-    , findByName
-    , fromList
-    , modifyById
-    , modifyByName
-    , removeFromInList
-    , search
-    , toList
+    , Action(..)
+    , NextActionsList
+    , DelegatedAction(..)
+    , WaitingForList
+    , delegateInItem
+    , doInItem
+    , inItemToNextAction
+    , inListfromList
+    , inListToList
+    , nextActionsfromList
+    , nextActionsToList
+    , waitingForfromList
+    , waitingForToList
     ) where
 
-import Data.List (filter, find)
-import Data.Text (Text, isInfixOf)
+import Data.Bifunctor
+import Data.List (delete, find)
+import Data.Text (Text)
+import Data.Set (Set)
+import Data.Time.Calendar (Day)
+
+import qualified Data.Set as S
 
 data InItem = InItem
     { inItemId :: !Int
@@ -22,37 +30,53 @@ data InItem = InItem
     }
     deriving (Read, Show, Eq, Ord)
 
-newtype InList = InList { unInList :: [InItem] } deriving (Read, Show, Eq)
+data Action = Action
+    { actionId :: !Int
+    , actionName :: !Text
+    }
+    deriving (Read, Show, Eq, Ord)
 
-empty :: InList
-empty = InList []
+data DelegatedAction = DelegatedAction
+    { delActionId :: !Int
+    , delActionName :: !Text
+    , delActionDelegate :: !Text
+    , delActionDate :: !Day
+    }
+    deriving (Read, Show, Eq, Ord)
 
-fromList :: [InItem] -> InList
-fromList = InList
+newtype InList = InList { unInList :: Set InItem } deriving (Eq, Show)
+newtype NextActionsList = NextActionsList { unNextActionsList :: Set Action } deriving (Eq, Show)
+newtype WaitingForList = WaitingForList { unWaitingForList :: Set DelegatedAction } deriving (Eq, Show)
 
-toList :: InList -> [InItem]
-toList = unInList
+inListToList :: InList -> [InItem]
+inListToList = S.toList . unInList
 
-addToInList :: InItem -> InList -> InList
-addToInList item = _modifyInList (item:)
+nextActionsToList :: NextActionsList -> [Action]
+nextActionsToList = S.toList . unNextActionsList
 
-removeFromInList :: InItem -> InList -> InList
-removeFromInList item = _modifyInList $ filter (/= item)
+waitingForToList :: WaitingForList -> [DelegatedAction]
+waitingForToList = S.toList . unWaitingForList
 
-findById :: Int -> InList -> Maybe InItem
-findById itemId = find ((== itemId) . inItemId) . unInList
+inListfromList :: [InItem] -> InList
+inListfromList = InList . S.fromList
 
-findByName :: Text -> InList -> Maybe InItem
-findByName itemName = find ((== itemName) . inItemName) . unInList
+nextActionsfromList :: [Action] -> NextActionsList
+nextActionsfromList = NextActionsList . S.fromList
 
-modifyById :: (InItem -> InItem) -> Int -> InList -> InList
-modifyById f itemId = _modifyInList $ map (\i -> if itemId == inItemId i then f i else i)
+waitingForfromList :: [DelegatedAction] -> WaitingForList
+waitingForfromList = WaitingForList . S.fromList
 
-modifyByName :: (InItem -> InItem) -> Text -> InList -> InList
-modifyByName f itemName = _modifyInList $ map (\n -> if itemName == inItemName n then f n else n)
+doInItem :: Text -> InList -> InList
+doInItem name = InList . S.filter ((/= name) . inItemName) . unInList
 
-search :: Text -> InList -> InList
-search term = _modifyInList $ filter (isInfixOf term . inItemName)
+inItemToNextAction :: Text -> InList -> NextActionsList -> (InList, NextActionsList)
+inItemToNextAction name inList next = bimap InList NextActionsList $ _transfer ((== name) . inItemName) _inItemToAction (unInList inList) (unNextActionsList next)
 
-_modifyInList :: ([InItem] -> [InItem]) -> InList -> InList
-_modifyInList f = InList . f . unInList
+delegateInItem :: Text -> Text -> Day -> InList -> WaitingForList -> (InList, WaitingForList)
+delegateInItem name delegate day inList waitingFor = bimap InList WaitingForList $ _transfer ((== name) . inItemName) (_inItemToDelegatedAction delegate day) (unInList inList) (unWaitingForList waitingFor)
+
+_inItemToAction (InItem i n) = Action i n
+_inItemToDelegatedAction delegate day (InItem i n) = DelegatedAction i n delegate day
+
+_transfer :: (Ord b) => (a -> Bool) -> (a -> b) -> Set a -> Set b -> (Set a, Set b)
+_transfer p f as bs = (S.filter (not . p) as, S.union bs (S.map f (S.filter p as)))

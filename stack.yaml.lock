@@ -3,7 +3,35 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: butcher-1.3.2.3@sha256:a3628cf0a41f2fec4e5cd128dd900f4608119f203385373cf0bf65c60291c396,3113
+    pantry-tree:
+      size: 1197
+      sha256: 5e230dd54452e9bd3bca7900092e3522c94781490a31ce935d4c8bb7586f5a9c
+  original:
+    hackage: butcher-1.3.2.3@sha256:a3628cf0a41f2fec4e5cd128dd900f4608119f203385373cf0bf65c60291c396,3113
+- completed:
+    hackage: multistate-0.8.0.2@sha256:fbb0d8ade9ef73c8ed92488f5804d0ebe75d3a9c24bf53452bc3a4f32b34cb2e,3713
+    pantry-tree:
+      size: 2143
+      sha256: 1753828d37b456e1e0241766d893b29f385ef7769fa79610f507b747935b77cb
+  original:
+    hackage: multistate-0.8.0.2@sha256:fbb0d8ade9ef73c8ed92488f5804d0ebe75d3a9c24bf53452bc3a4f32b34cb2e,3713
+- completed:
+    hackage: deque-0.4.2.3@sha256:7cc8ddfc77df351ff9c16e838ccdb4a89f055c80a3111e27eba8d90e8edde7d0,1853
+    pantry-tree:
+      size: 807
+      sha256: 7f584c71e9e912935f829cb4667411ae3c3048fcd8b935170fb5a45188019403
+  original:
+    hackage: deque-0.4.2.3@sha256:7cc8ddfc77df351ff9c16e838ccdb4a89f055c80a3111e27eba8d90e8edde7d0,1853
+- completed:
+    hackage: strict-list-0.1.4@sha256:0fa869e2c21b710b7133e8628169f120fe6299342628edd3d5087ded299bc941,1631
+    pantry-tree:
+      size: 340
+      sha256: bbb22fd014867dc48697ddd8598d4a9fb03fa2d58ef79bed94f208a9b6d94224
+  original:
+    hackage: strict-list-0.1.4@sha256:0fa869e2c21b710b7133e8628169f120fe6299342628edd3d5087ded299bc941,1631
 snapshots:
 - completed:
     size: 499889
