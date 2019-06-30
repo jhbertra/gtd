@@ -10,14 +10,21 @@ import Gtd
 
 main :: IO ()
 main = hspec $ do
+    
     describe "doInItem" $ do
         it "Is idempotent" $ property prop_doInItem_idempotent
         it "Is id when item not in list" $ property prop_doInItem_idNotInList
         it "Removes the specified item" $ property prop_doInItem
+
     describe "delegateInItem" $ do
         it "Is idempotent" $ property prop_delegateInItem_idempotent
         it "Is id when item not in list" $ property prop_delegateInItem_idNotInList
         it "Transfers the specified item" $ property prop_delegateInItem
+
+    describe "inItemToNextAction" $ do
+        it "Is idempotent" $ property prop_inItemToNextAction_idempotent
+        it "Is id when item not in list" $ property prop_inItemToNextAction_idNotInList
+        it "Transfers the specified item" $ property prop_inItemToNextAction
 
 data ElementInSet a = ElementInSet a [a] deriving Show
 
@@ -45,16 +52,16 @@ prop_doInItem (ElementInSet item list) =
 
 -- delegateInItem properties
 prop_delegateInItem_idempotent :: [String] -> ElementInSet String -> Property
-prop_delegateInItem_idempotent waitingList (ElementInSet item inItems) =
-    null (waitingList `intersect` inItems) ==> actual == expected
+prop_delegateInItem_idempotent waitingFor (ElementInSet item inList) =
+    null (waitingFor `intersect` inList) ==> actual == expected
   where
     item' = pack item
-    inList = inListfromList $ map (InItem 0 . pack) inItems
-    waitingFor = waitingForfromList $ map (\n -> DelegatedAction 0 (pack n) delegate day) waitingList
-    expected = delegateInItem item' delegate day inList waitingFor
+    inList' = inListfromList $ map (InItem 0 . pack) inList
+    waitingFor' = waitingForfromList $ map (\n -> DelegatedAction 0 (pack n) delegate day) waitingFor
+    expected = delegateInItem item' delegate day inList' waitingFor'
     actual = 
-        let (inList', waitingFor') = expected
-        in delegateInItem item' delegate day inList' waitingFor'
+        let (inList'', waitingFor'') = expected
+        in delegateInItem item' delegate day inList'' waitingFor''
 
 prop_delegateInItem_idNotInList :: String -> [String] -> [String] -> Property
 prop_delegateInItem_idNotInList item inList waitingFor =
@@ -76,7 +83,41 @@ prop_delegateInItem (ElementInSet item inList) waitingFor =
     inList' = inListfromList $ map (InItem 0 . pack) inList
     waitingFor' = waitingForfromList $ map (\n -> DelegatedAction 0 (pack n) delegate day) waitingFor
 
+-- inItemToNextAction properties
+prop_inItemToNextAction_idempotent :: [String] -> ElementInSet String -> Property
+prop_inItemToNextAction_idempotent nextActions (ElementInSet item inList) =
+    null (nextActions `intersect` inList) ==> actual == expected
+  where
+    item' = pack item
+    inList' = inListfromList $ map (InItem 0 . pack) inList
+    nextActions' = nextActionsfromList $ map (Action 0 . pack) nextActions
+    expected = inItemToNextAction item' inList' nextActions'
+    actual = 
+        let (inList'', nextActions'') = expected
+        in inItemToNextAction item' inList'' nextActions''
+
+prop_inItemToNextAction_idNotInList :: String -> [String] -> [String] -> Property
+prop_inItemToNextAction_idNotInList item inList nextActions =
+    notElem item inList
+        && notElem item nextActions
+        && null (nextActions `intersect` inList)
+        ==> inItemToNextAction item' inList' nextActions' == (inList', nextActions')
+  where
+    item' = pack item
+    inList' = inListfromList $ map (InItem 0 . pack) inList
+    nextActions' = nextActionsfromList $ map (Action 0 . pack) nextActions
+
+prop_inItemToNextAction :: ElementInSet String -> [String] -> Property
+prop_inItemToNextAction (ElementInSet item inList) nextActions =
+    null (nextActions `intersect` inList)
+    ==> andT $ bimap (haveSame (delete item (nub inList)) . unInList) (haveSame (item:nub nextActions) . nub . unNextActions) (inItemToNextAction item' inList' nextActions')
+  where
+    item' = pack item
+    inList' = inListfromList $ map (InItem 0 . pack) inList
+    nextActions' = nextActionsfromList $ map (Action 0 . pack) nextActions
+
 unInList = map (unpack . inItemName) . inListToList
+unNextActions = map (unpack . actionName) . nextActionsToList
 unWaitingFor = map (unpack . delActionName) . waitingForToList
 delegate = pack "delegate"
 day = fromGregorian 0 0 0
