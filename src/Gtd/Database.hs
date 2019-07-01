@@ -15,8 +15,7 @@ module Gtd.Database
     , updateAction
     , updateDelegatedAction
     , updateInItem
-    )
-  where
+    ) where
 
 import Control.Monad (unless)
 import Data.Text (Text)
@@ -26,6 +25,8 @@ import Database.HDBC.Sqlite3
 import System.Directory
 
 import Gtd
+
+-- INIT
 
 connect :: IO Connection
 connect = do
@@ -73,6 +74,8 @@ prepareDb c = do
         pure ()
     commit c
 
+-- CREATE
+
 addInItem ::  (IConnection c) => c -> InItem -> IO InItem
 addInItem c (InItem _ name) =
     handleSql (handleError "addInItem") $ do
@@ -99,6 +102,8 @@ addDelegatedAction c (DelegatedAction _ name delegate date) =
         case r of
             [[delegatedActionId]] -> pure $ DelegatedAction (fromSql delegatedActionId) name delegate date
             x -> fail $ "addDelegatedAction: unexpected SQL query result: " ++ show x
+
+-- READ
 
 getInItem ::  (IConnection c) => c -> Text -> IO (Maybe InItem)
 getInItem = getOne "getInItem" mapInItem
@@ -146,6 +151,8 @@ getDelegatedActions = getAll "getDelegatedActions" mapDelegatedAction
     \   Date\n\
     \FROM DelegatedAction\n"
 
+-- UPDATE
+
 updateInItem ::  (IConnection c) => c -> InItem -> IO ()
 updateInItem c (InItem itemId name) =
     handleSql (handleError "updateInItem") $
@@ -163,6 +170,8 @@ updateDelegatedAction c (DelegatedAction actionId name delegate date) =
     handleSql (handleError "updateDelegatedAction") $
         run c "UPDATE DelegatedAction SET Name = ?, Delegate = ?, Date = ? WHERE Id = ? AND IsDeleted = 0" [toSql name, toSql delegate, toSql date, toSql actionId]
         >> pure ()
+
+-- DELETE
 
 deleteInItem ::  (IConnection c) => c -> InItem -> IO ()
 deleteInItem c (InItem itemId _) =

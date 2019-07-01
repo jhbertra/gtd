@@ -1,4 +1,6 @@
 module Main where
 
+import Gtd.Cli
+
 main :: IO ()
-main = print "Hello world"
+main = defaultMain

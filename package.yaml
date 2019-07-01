@@ -44,6 +44,7 @@ dependencies:
 - HDBC
 - HDBC-sqlite3
 - directory
+- cmdargs
 
 library:
   source-dirs: src
