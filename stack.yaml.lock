@@ -32,6 +32,13 @@ packages:
       sha256: bbb22fd014867dc48697ddd8598d4a9fb03fa2d58ef79bed94f208a9b6d94224
   original:
     hackage: strict-list-0.1.4@sha256:0fa869e2c21b710b7133e8628169f120fe6299342628edd3d5087ded299bc941,1631
+- completed:
+    hackage: HDBC-sqlite3-2.3.3.1@sha256:5025fd94d02b9b3f0b8b8233796dd9a85a0b3dda6503c6e671e3eddbc51cb4d4,2424
+    pantry-tree:
+      size: 1427
+      sha256: 76e71f73502350ed3fe5fc64604a21a3c8027d49fe6846183d53dbdaf583437a
+  original:
+    hackage: HDBC-sqlite3-2.3.3.1@sha256:5025fd94d02b9b3f0b8b8233796dd9a85a0b3dda6503c6e671e3eddbc51cb4d4,2424
 snapshots:
 - completed:
     size: 499889

@@ -46,6 +46,7 @@ extra-deps:
 - multistate-0.8.0.2@sha256:fbb0d8ade9ef73c8ed92488f5804d0ebe75d3a9c24bf53452bc3a4f32b34cb2e,3713
 - deque-0.4.2.3@sha256:7cc8ddfc77df351ff9c16e838ccdb4a89f055c80a3111e27eba8d90e8edde7d0,1853
 - strict-list-0.1.4@sha256:0fa869e2c21b710b7133e8628169f120fe6299342628edd3d5087ded299bc941,1631
+- HDBC-sqlite3-2.3.3.1@sha256:5025fd94d02b9b3f0b8b8233796dd9a85a0b3dda6503c6e671e3eddbc51cb4d4,2424
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

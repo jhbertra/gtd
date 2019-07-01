@@ -41,6 +41,9 @@ dependencies:
 - time
 - QuickCheck
 - hspec
+- HDBC
+- HDBC-sqlite3
+- directory
 
 library:
   source-dirs: src
