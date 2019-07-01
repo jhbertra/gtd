@@ -6,7 +6,8 @@ module Gtd.Cli
 
 import Control.Monad (forM_)
 import Data.List (sort)
-import Data.Text (Text)
+import Data.Maybe (isJust)
+import Data.Text (Text, unpack)
 import Database.HDBC (IConnection, commit)
 import System.Console.CmdArgs
 
@@ -22,7 +23,7 @@ data Opts
 in_ :: Opts
 in_ = In
     { items = def &= args
-    } &= help "Add item(s) to the \"in\" list" &= auto
+    } &= help "Add item(s) to your \"in\" list" &= auto
 
 defaultMain :: IO ()
 defaultMain = do
@@ -41,5 +42,9 @@ showInList c = getInItems c >>= mapM_ (TIO.putStrLn . inItemName) . sort
 
 addToInList :: (IConnection c) => c -> [Text] -> IO ()
 addToInList c items = do
-    forM_ items $ addInItem c . InItem 0
+    forM_ items $ \item -> do
+        exists <- isJust <$> getInItem c item
+        if exists
+            then errorWithoutStackTrace $ "gtd: Item " ++ show item ++ " already in the InList"
+            else addInItem c $ InItem 0 item
     commit c
