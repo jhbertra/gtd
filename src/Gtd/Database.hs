@@ -46,7 +46,6 @@ prepareDb c = do
             "CREATE TABLE InItem\n\
             \   ( Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT\n\
             \   , Name TEXT NOT NULL UNIQUE\n\
-            \   , IsDeleted INTEGER NOT NULL\n\
             \   )"
             []
         pure ()
@@ -56,7 +55,6 @@ prepareDb c = do
             "CREATE TABLE Action\n\
             \   ( Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT\n\
             \   , Name TEXT NOT NULL UNIQUE\n\
-            \   , IsDeleted INTEGER NOT NULL\n\
             \   )"
             []
         pure ()
@@ -68,7 +66,6 @@ prepareDb c = do
             \   , Name TEXT NOT NULL UNIQUE\n\
             \   , Delegate TEXT NOT NULL\n\
             \   , Date DATE NOT NULL\n\
-            \   , IsDeleted INTEGER NOT NULL\n\
             \   )"
             []
         pure ()
@@ -79,7 +76,7 @@ prepareDb c = do
 addInItem ::  (IConnection c) => c -> InItem -> IO InItem
 addInItem c (InItem _ name) =
     handleSql (handleError "addInItem") $ do
-        _ <- run c "INSERT INTO InItem (Name, IsDeleted) VALUES (?, 0)" [toSql name]
+        _ <- run c "INSERT INTO InItem (Name) VALUES (?)" [toSql name]
         r <- quickQuery' c "SELECT Id FROM InItem WHERE Name = ?" [toSql name]
         case r of
             [[itemId]] -> pure $ InItem (fromSql itemId) name
@@ -88,7 +85,7 @@ addInItem c (InItem _ name) =
 addAction ::  (IConnection c) => c -> Action -> IO Action
 addAction c (Action _ name) =
     handleSql (handleError "addAction") $ do
-        _ <- run c "INSERT INTO Action (Name, IsDeleted) VALUES (?, 0)" [toSql name]
+        _ <- run c "INSERT INTO Action (Name) VALUES (?)" [toSql name]
         r <- quickQuery' c "SELECT Id FROM Action WHERE Name = ?" [toSql name]
         case r of
             [[actionId]] -> pure $ Action (fromSql actionId) name
@@ -97,7 +94,7 @@ addAction c (Action _ name) =
 addDelegatedAction ::  (IConnection c) => c -> DelegatedAction -> IO DelegatedAction
 addDelegatedAction c (DelegatedAction _ name delegate date) =
     handleSql (handleError "addDelegatedAction") $ do
-        _ <- run c "INSERT INTO DelegatedAction (Name, Delegate, Date, IsDeleted) VALUES (?, ?, ?, 0)" [toSql name, toSql delegate, toSql date]
+        _ <- run c "INSERT INTO DelegatedAction (Name, Delegate, Date) VALUES (?, ?, ?)" [toSql name, toSql delegate, toSql date]
         r <- quickQuery' c "SELECT Id FROM DelegatedAction WHERE Name = ?" [toSql name]
         case r of
             [[delegatedActionId]] -> pure $ DelegatedAction (fromSql delegatedActionId) name delegate date
@@ -156,19 +153,19 @@ getDelegatedActions = getAll "getDelegatedActions" mapDelegatedAction
 updateInItem ::  (IConnection c) => c -> InItem -> IO ()
 updateInItem c (InItem itemId name) =
     handleSql (handleError "updateInItem") $
-        run c "UPDATE InItem SET Name = ? WHERE Id = ? AND IsDeleted = 0" [toSql name, toSql itemId]
+        run c "UPDATE InItem SET Name = ? WHERE Id = ?" [toSql name, toSql itemId]
         >> pure ()
 
 updateAction ::  (IConnection c) => c -> Action -> IO ()
 updateAction c (Action actionId name) =
     handleSql (handleError "updateAction") $
-        run c "UPDATE Action SET Name = ? WHERE Id = ? AND IsDeleted = 0" [toSql name, toSql actionId]
+        run c "UPDATE Action SET Name = ? WHERE Id = ?" [toSql name, toSql actionId]
         >> pure ()
 
 updateDelegatedAction ::  (IConnection c) => c -> DelegatedAction -> IO ()
 updateDelegatedAction c (DelegatedAction actionId name delegate date) =
     handleSql (handleError "updateDelegatedAction") $
-        run c "UPDATE DelegatedAction SET Name = ?, Delegate = ?, Date = ? WHERE Id = ? AND IsDeleted = 0" [toSql name, toSql delegate, toSql date, toSql actionId]
+        run c "UPDATE DelegatedAction SET Name = ?, Delegate = ?, Date = ? WHERE Id = ?" [toSql name, toSql delegate, toSql date, toSql actionId]
         >> pure ()
 
 -- DELETE
@@ -176,19 +173,19 @@ updateDelegatedAction c (DelegatedAction actionId name delegate date) =
 deleteInItem ::  (IConnection c) => c -> InItem -> IO ()
 deleteInItem c (InItem itemId _) =
     handleSql (handleError "deleteInItem") $
-        run c "UPDATE InItem SET IsDeleted = 1 WHERE Id = ?" [toSql itemId]
+        run c "DELETE FROM InItem WHERE Id = ?" [toSql itemId]
         >> pure ()
 
 deleteAction ::  (IConnection c) => c -> Action -> IO ()
 deleteAction c (Action actionId _) =
     handleSql (handleError "deleteAction") $
-        run c "UPDATE Action SET IsDeleted = 1 WHERE Id = ?" [toSql actionId]
+        run c "DELETE FROM Action WHERE Id = ?" [toSql actionId]
         >> pure ()
 
 deleteDelegatedAction ::  (IConnection c) => c -> DelegatedAction -> IO ()
 deleteDelegatedAction c (DelegatedAction actionId _ _ _) =
     handleSql (handleError "deleteDelegatedAction") $
-        run c "UPDATE DelegatedAction SET IsDeleted = 1 WHERE Id = ?" [toSql actionId]
+        run c "DELETE FROM DelegatedAction WHERE Id = ?" [toSql actionId]
         >> pure ()
 
 mapInItem :: [SqlValue] -> InItem
@@ -216,8 +213,7 @@ getOne
     -> Text
     -> IO (Maybe a)
 getOne fname f q c name =
-    handleSql (handleError fname) (listToMaybe . map f <$> quickQuery' c (q ++ " WHERE Name = ? AND IsDeleted = 0") [toSql name])
+    handleSql (handleError fname) (listToMaybe . map f <$> quickQuery' c (q ++ " WHERE Name = ?") [toSql name])
 
 getAll :: (IConnection c) => String -> ([SqlValue] -> a) -> String -> c -> IO [a]
-getAll fname f q c =
-    handleSql (handleError fname) (map f <$> quickQuery' c (q ++ " WHERE IsDeleted = 0") [])
+getAll fname f q c = handleSql (handleError fname) $ map f <$> quickQuery' c q []
