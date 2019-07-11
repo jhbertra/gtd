@@ -45,6 +45,7 @@ dependencies:
 - HDBC-sqlite3
 - directory
 - cmdargs
+- mtl
 
 library:
   source-dirs: src
