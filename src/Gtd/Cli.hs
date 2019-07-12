@@ -4,12 +4,12 @@ module Gtd.Cli
     ( defaultMain
     ) where
 
-import Control.Monad (forM_)
+import Control.Monad (forM_, (<=<))
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.State.Lazy (StateT, execStateT, get, put, modify)
+import Control.Monad.State.Lazy (StateT, execStateT, get, modify)
 import Data.List (sort)
-import Data.Maybe (fromMaybe, isJust)
-import Data.Text (Text, unpack)
+import Data.Maybe (isJust)
+import Data.Text (Text)
 import Data.Time.LocalTime
 import Database.HDBC (IConnection, commit, rollback)
 import System.Console.CmdArgs
@@ -19,7 +19,6 @@ import Text.Read (readMaybe)
 import Gtd
 import Gtd.Database
 
-import qualified Data.Char as C
 import qualified Data.Set as S
 import qualified Data.Text.IO as TIO
 import qualified Data.Text as T
@@ -86,7 +85,6 @@ renameInInList c items = do
                     then pure ()
                     else do
                         exists <- isJust <$> getInItem c newName
-                        print "here"
                         if exists
                             then errorWithoutStackTrace "gtd: New name conflicts with existing in list item"
                             else updateInItem c $ loaded' { inItemName = newName }
@@ -118,7 +116,7 @@ processInList c = do
         else do
             state <- execStateT (mapM_ processInItem $ inListToList . inProcessInList $ initialState) initialState
             if inProcessContinue state
-                then commitState c initialState state
+                then commitState initialState state
                 else rollback c
     putStrLn ""
   where
@@ -128,7 +126,7 @@ processInList c = do
         <*> fmap nextActionsfromList (getActions c)
         <*> fmap waitingForfromList (getDelegatedActions c)
 
-    commitState c initialState state = do
+    commitState initialState state = do
         forM_ (deletedInItems initialState state) $ deleteInItem c
         forM_ (addedActions initialState state) $ addAction c
         forM_ (addedDelegatedActions initialState state) $ addDelegatedAction c
@@ -151,12 +149,12 @@ processInItem item = do
     continue <- fmap inProcessContinue get
     if continue
         then do
-            choice <- liftIO $ getChoice item
-            handleChoice choice item
+            choice <- liftIO $ getChoice
+            handleChoice choice
         else
             pure ()
   where
-    getChoice item = do
+    getChoice = do
         putStrLn ""
         putStrLn $ "How do you want to handle " ++ (show . inItemName) item ++ "?"
         putStrLn ""
@@ -171,23 +169,22 @@ processInItem item = do
         putStrLn ""
         putStr "Selection: "
         hFlush stdout
-        choice <- parseChoice <$> getLine
-        maybe (putStrLn "" >> putStrLn "That is not a valid option" >> getChoice item) pure choice
+        choice <- fmap (parseChoice <=< readMaybe) getLine
+        maybe (putStrLn "" >> putStrLn "That is not a valid option" >> getChoice) pure choice
     
-    parseChoice s =
-        case readMaybe s of
-            Just 1 -> Just DoIt
-            Just 2 -> Just NextAction
-            Just 3 -> Just Project
-            Just 4 -> Just Delegate
-            Just 5 -> Just SomeDay
-            Just 6 -> Just Incubate
-            Just 7 -> Just Trash
-            Just 8 -> Just Quit
-            _ -> Nothing
+    parseChoice :: Int -> Maybe ProcessInListOption
+    parseChoice 1 = Just DoIt
+    parseChoice 2 = Just NextAction
+    parseChoice 3 = Just Project
+    parseChoice 4 = Just Delegate
+    parseChoice 5 = Just SomeDay
+    parseChoice 6 = Just Incubate
+    parseChoice 7 = Just Trash
+    parseChoice 8 = Just Quit
+    parseChoice _ = Nothing
     
-    handleChoice :: ProcessInListOption -> InItem -> StateT InListProcessState IO ()
-    handleChoice DoIt item = do
+    handleChoice :: ProcessInListOption -> StateT InListProcessState IO ()
+    handleChoice DoIt = do
         _ <- liftIO $ do
             putStrLn ""
             putStr "Go do it! (press any key to continue)"
@@ -195,22 +192,22 @@ processInItem item = do
             getLine
         modify $ \s -> s { inProcessInList = doInItem (inItemName item) $ inProcessInList s }
     
-    handleChoice NextAction item = modify $ \s ->
+    handleChoice NextAction = modify $ \s ->
         let (inList', nextActions') = inItemToNextAction (inItemName item) (inProcessInList s) (inProcessNextActions s)
         in s { inProcessInList = inList', inProcessNextActions = nextActions' }
     
-    handleChoice Project item = pure ()
+    handleChoice Project = pure ()
     
-    handleChoice Delegate item = do
+    handleChoice Delegate = do
         (delegate, day) <- liftIO $ (,) <$> getDelegate <*> getDay
         modify $ \s ->
             let (inList', waitingFor) = delegateInItem (inItemName item) delegate day (inProcessInList s) (inProcessWaitingFor s)
             in s { inProcessInList = inList', inProcessWaitingFor = waitingFor }
     
-    handleChoice SomeDay item = pure ()
-    handleChoice Incubate item = pure ()
-    handleChoice Trash item = modify $ \s -> s { inProcessInList = doInItem (inItemName item) $ inProcessInList s }
-    handleChoice Quit item = modify $ \s -> s { inProcessContinue = False }
+    handleChoice SomeDay = pure ()
+    handleChoice Incubate = pure ()
+    handleChoice Trash = modify $ \s -> s { inProcessInList = doInItem (inItemName item) $ inProcessInList s }
+    handleChoice Quit = modify $ \s -> s { inProcessContinue = False }
 
     getDelegate = do
         putStr "Who is this being delegated to? "

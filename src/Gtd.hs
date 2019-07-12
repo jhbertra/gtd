@@ -16,8 +16,7 @@ module Gtd
     , waitingForToList
     ) where
 
-import Data.Bifunctor
-import Data.List (delete, find)
+import Data.Bifunctor (bimap)
 import Data.Text (Text)
 import Data.Set (Set)
 import Data.Time.Calendar (Day)
@@ -75,7 +74,10 @@ inItemToNextAction name inList next = bimap InList NextActionsList $ _transfer (
 delegateInItem :: Text -> Text -> Day -> InList -> WaitingForList -> (InList, WaitingForList)
 delegateInItem name delegate day inList waitingFor = bimap InList WaitingForList $ _transfer ((== name) . inItemName) (_inItemToDelegatedAction delegate day) (unInList inList) (unWaitingForList waitingFor)
 
+_inItemToAction :: InItem -> Action
 _inItemToAction (InItem i n) = Action i n
+
+_inItemToDelegatedAction :: Text -> Day -> InItem -> DelegatedAction
 _inItemToDelegatedAction delegate day (InItem i n) = DelegatedAction i n delegate day
 
 _transfer :: (Ord b) => (a -> Bool) -> (a -> b) -> Set a -> Set b -> (Set a, Set b)
