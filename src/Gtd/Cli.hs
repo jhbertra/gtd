@@ -25,6 +25,9 @@ import qualified Data.Text as T
 
 data Opts
     = In { items :: [Text], delete :: Bool, rename :: Bool, interactive :: Bool }
+    | Next
+    | Waiting
+    | Projects
     deriving (Data, Typeable, Show, Eq)
 
 in_ :: Opts
@@ -35,10 +38,19 @@ in_ = In
     , interactive = def &= name "i" &= help "Interactively process the in list"
     } &= help "Add item(s) to your \"in\" list" &= auto
 
+projects_ :: Opts
+projects_ = Projects &= help "Browse your \"projects\" list"
+
+next_ :: Opts
+next_ = Next &= help "Browse your \"next actions\" list"
+
+waiting_ :: Opts
+waiting_ = Waiting &= help "Browse your \"waiting for\" list"
+
 defaultMain :: IO ()
 defaultMain = do
     opts <- cmdArgs $
-        modes [in_]
+        modes [in_, projects_, next_, waiting_]
         &= help "Getting things done"
         &= program "gtd"
         &= summary "Gtd v1.0"
@@ -49,9 +61,24 @@ defaultMain = do
         In items True _ _ -> deleteFromInList c items
         In items _ True _ -> renameInInList c items
         In items _ _ _ -> addToInList c items
+        Projects -> showProjects c
+        Next -> showNext c
+        Waiting -> showWaiting c
 
 showInList :: (IConnection c) => c -> IO ()
 showInList c = getInItems c >>= mapM_ (TIO.putStrLn . inItemName) . sort
+
+showProjects :: (IConnection c) => c -> IO ()
+showProjects c = getProjects c >>= mapM_ (TIO.putStrLn . projectName) . sort
+
+showNext :: (IConnection c) => c -> IO ()
+showNext c = getActions c >>= mapM_ (TIO.putStrLn . actionName) . sort
+
+showWaiting :: (IConnection c) => c -> IO ()
+showWaiting c =
+    getDelegatedActions c >>= mapM_ (putStrLn . prettyPrint) . sort
+  where
+    prettyPrint (DelegatedAction _ n delegate date) = T.unpack n ++ " (waiting on " ++ T.unpack delegate ++ " since " ++ show date ++ ")"
 
 addToInList :: (IConnection c) => c -> [Text] -> IO ()
 addToInList c items = do
@@ -93,7 +120,7 @@ renameInInList c items = do
 data ProcessInListOption
     = DoIt
     | NextAction
-    | Project
+    | MakeProject
     | Delegate
     | SomeDay
     | Incubate
@@ -104,6 +131,7 @@ data InListProcessState = InListProcessState
     { inProcessContinue :: !Bool
     , inProcessInList :: !InList
     , inProcessNextActions :: !NextActionsList
+    , inProcessProjects :: !ProjectsList
     , inProcessWaitingFor :: !WaitingForList
     }
     deriving (Show)
@@ -124,24 +152,22 @@ processInList c = do
         True
         <$> fmap inListfromList (getInItems c)
         <*> fmap nextActionsfromList (getActions c)
+        <*> fmap projectsfromList (getProjects c)
         <*> fmap waitingForfromList (getDelegatedActions c)
 
     commitState initialState state = do
-        forM_ (deletedInItems initialState state) $ deleteInItem c
-        forM_ (addedActions initialState state) $ addAction c
-        forM_ (addedDelegatedActions initialState state) $ addDelegatedAction c
+        forM_ (deleted initialState state inListToList inProcessInList) $ deleteInItem c
+        forM_ (added initialState state nextActionsToList inProcessNextActions) $ addAction c
+        forM_ (added initialState state waitingForToList inProcessWaitingFor) $ addDelegatedAction c
+        forM_ (added initialState state projectsToList inProcessProjects) $ addProject c
         commit c
     
-    deletedInItems initialState state =
-        let (oldSet, newSet) = mapTuple (S.fromList . inListToList . inProcessInList) (initialState, state)
+    deleted initialState state toList getList =
+        let (oldSet, newSet) = mapTuple (S.fromList . toList . getList) (initialState, state)
         in S.toList $ S.difference oldSet newSet
     
-    addedActions initialState state =
-        let (oldSet, newSet) = mapTuple (S.fromList . nextActionsToList . inProcessNextActions) (initialState, state)
-        in S.toList $ S.difference newSet oldSet
-    
-    addedDelegatedActions initialState state =
-        let (oldSet, newSet) = mapTuple (S.fromList . waitingForToList . inProcessWaitingFor) (initialState, state)
+    added initialState state toList getList =
+        let (oldSet, newSet) = mapTuple (S.fromList . toList . getList) (initialState, state)
         in S.toList $ S.difference newSet oldSet
 
 processInItem :: InItem -> StateT InListProcessState IO ()
@@ -175,7 +201,7 @@ processInItem item = do
     parseChoice :: Int -> Maybe ProcessInListOption
     parseChoice 1 = Just DoIt
     parseChoice 2 = Just NextAction
-    parseChoice 3 = Just Project
+    parseChoice 3 = Just MakeProject
     parseChoice 4 = Just Delegate
     parseChoice 5 = Just SomeDay
     parseChoice 6 = Just Incubate
@@ -196,7 +222,9 @@ processInItem item = do
         let (inList', nextActions') = inItemToNextAction (inItemName item) (inProcessInList s) (inProcessNextActions s)
         in s { inProcessInList = inList', inProcessNextActions = nextActions' }
     
-    handleChoice Project = pure ()
+    handleChoice MakeProject = modify $ \s ->
+        let (inList', projects') = inItemToProject (inItemName item) (inProcessInList s) (inProcessProjects s)
+        in s { inProcessInList = inList', inProcessProjects = projects' }
     
     handleChoice Delegate = do
         (delegate, day) <- liftIO $ (,) <$> getDelegate <*> getDay

@@ -2,19 +2,24 @@ module Gtd.Database
     ( addAction
     , addDelegatedAction
     , addInItem
+    , addProject
     , connect
     , deleteAction
     , deleteDelegatedAction
     , deleteInItem
+    , deleteProject
     , getAction
     , getActions
     , getDelegatedAction
     , getDelegatedActions
     , getInItem
     , getInItems
+    , getProject
+    , getProjects
     , updateAction
     , updateDelegatedAction
     , updateInItem
+    , updateProject
     ) where
 
 import Control.Monad (unless)
@@ -69,6 +74,15 @@ prepareDb c = do
             \   )"
             []
         pure ()
+    unless ("Project" `elem` tables) $ do
+        _ <- run
+            c
+            "CREATE TABLE Project\n\
+            \   ( Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT\n\
+            \   , Name TEXT NOT NULL UNIQUE\n\
+            \   )"
+            []
+        pure ()
     commit c
 
 -- CREATE
@@ -99,6 +113,15 @@ addDelegatedAction c (DelegatedAction _ name delegate date) =
         case r of
             [[delegatedActionId]] -> pure $ DelegatedAction (fromSql delegatedActionId) name delegate date
             x -> fail $ "addDelegatedAction: unexpected SQL query result: " ++ show x
+
+addProject ::  (IConnection c) => c -> Project -> IO Project
+addProject c (Project _ name) =
+    handleSql (handleError "addProject") $ do
+        _ <- run c "INSERT INTO Project (Name) VALUES (?)" [toSql name]
+        r <- quickQuery' c "SELECT Id FROM Project WHERE Name = ?" [toSql name]
+        case r of
+            [[actionId]] -> pure $ Project (fromSql actionId) name
+            x -> fail $ "addProject: unexpected SQL query result: " ++ show x
 
 -- READ
 
@@ -148,6 +171,20 @@ getDelegatedActions = getAll "getDelegatedActions" mapDelegatedAction
     \   Date\n\
     \FROM DelegatedAction\n"
 
+getProject ::  (IConnection c) => c -> Text -> IO (Maybe Project)
+getProject = getOne "getProject" mapProject
+    "SELECT\n\
+    \   Id,\n\
+    \   Name\n\
+    \FROM Project\n"
+
+getProjects ::  (IConnection c) => c -> IO [Project]
+getProjects = getAll "getProjects" mapProject
+    "SELECT\n\
+    \   Id,\n\
+    \   Name\n\
+    \FROM Project\n"
+
 -- UPDATE
 
 updateInItem ::  (IConnection c) => c -> InItem -> IO ()
@@ -166,6 +203,12 @@ updateDelegatedAction ::  (IConnection c) => c -> DelegatedAction -> IO ()
 updateDelegatedAction c (DelegatedAction actionId name delegate date) =
     handleSql (handleError "updateDelegatedAction") $
         run c "UPDATE DelegatedAction SET Name = ?, Delegate = ?, Date = ? WHERE Id = ?" [toSql name, toSql delegate, toSql date, toSql actionId]
+        >> pure ()
+
+updateProject ::  (IConnection c) => c -> Project -> IO ()
+updateProject c (Project actionId name) =
+    handleSql (handleError "updateProject") $
+        run c "UPDATE Project SET Name = ? WHERE Id = ?" [toSql name, toSql actionId]
         >> pure ()
 
 -- DELETE
@@ -188,6 +231,12 @@ deleteDelegatedAction c (DelegatedAction actionId _ _ _) =
         run c "DELETE FROM DelegatedAction WHERE Id = ?" [toSql actionId]
         >> pure ()
 
+deleteProject ::  (IConnection c) => c -> Project -> IO ()
+deleteProject c (Project actionId _) =
+    handleSql (handleError "deleteProject") $
+        run c "DELETE FROM Project WHERE Id = ?" [toSql actionId]
+        >> pure ()
+
 mapInItem :: [SqlValue] -> InItem
 mapInItem [itemId, itemName] = InItem (fromSql itemId) (fromSql itemName)
 mapInItem x = error $ "mapInItem: wrong column count: " ++ show (length x)
@@ -200,6 +249,10 @@ mapDelegatedAction :: [SqlValue] -> DelegatedAction
 mapDelegatedAction [dActionId, dActionName, dActionDelegate, dActionDate] =
     DelegatedAction (fromSql dActionId) (fromSql dActionName) (fromSql dActionDelegate) (fromSql dActionDate)
 mapDelegatedAction x = error $ "mapDelegatedAction: wrong column count: " ++ show (length x)
+
+mapProject :: [SqlValue] -> Project
+mapProject [projectId, projectName] = Project (fromSql projectId) (fromSql projectName)
+mapProject x = error $ "mapProject: wrong column count: " ++ show (length x)
 
 handleError :: String -> SqlError -> IO a
 handleError name e = fail $ name ++ ": SQL error: " ++ show e
