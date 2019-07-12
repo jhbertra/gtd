@@ -7,16 +7,21 @@ module Gtd
     , WaitingForList
     , Project(..)
     , ProjectsList
+    , SomeDay(..)
+    , SomeDayList
     , delegateInItem
     , doInItem
     , inItemToNextAction
     , inItemToProject
+    , inItemToSomeDay
     , inListfromList
     , inListToList
     , nextActionsfromList
     , nextActionsToList
     , projectsfromList
     , projectsToList
+    , someDayfromList
+    , someDayToList
     , waitingForfromList
     , waitingForToList
     ) where
@@ -54,10 +59,17 @@ data Project = Project
     }
     deriving (Read, Show, Eq, Ord)
 
+data SomeDay = SomeDay
+    { someDayId :: !Int
+    , someDayName :: !Text
+    }
+    deriving (Read, Show, Eq, Ord)
+
 newtype InList = InList { unInList :: Set InItem } deriving (Eq, Show)
 newtype NextActionsList = NextActionsList { unNextActionsList :: Set Action } deriving (Eq, Show)
 newtype WaitingForList = WaitingForList { unWaitingForList :: Set DelegatedAction } deriving (Eq, Show)
 newtype ProjectsList = ProjectsList { unProjectsList :: Set Project } deriving (Eq, Show)
+newtype SomeDayList = SomeDayList { unSomeDayList :: Set SomeDay } deriving (Eq, Show)
 
 inListToList :: InList -> [InItem]
 inListToList = S.toList . unInList
@@ -71,6 +83,9 @@ waitingForToList = S.toList . unWaitingForList
 projectsToList :: ProjectsList -> [Project]
 projectsToList = S.toList . unProjectsList
 
+someDayToList :: SomeDayList -> [SomeDay]
+someDayToList = S.toList . unSomeDayList
+
 inListfromList :: [InItem] -> InList
 inListfromList = InList . S.fromList
 
@@ -82,6 +97,9 @@ waitingForfromList = WaitingForList . S.fromList
 
 projectsfromList :: [Project] -> ProjectsList
 projectsfromList = ProjectsList . S.fromList
+
+someDayfromList :: [SomeDay] -> SomeDayList
+someDayfromList = SomeDayList . S.fromList
 
 doInItem :: Text -> InList -> InList
 doInItem name = InList . S.filter ((/= name) . inItemName) . unInList
@@ -95,6 +113,9 @@ delegateInItem name delegate day inList waitingFor = bimap InList WaitingForList
 inItemToProject :: Text -> InList -> ProjectsList -> (InList, ProjectsList)
 inItemToProject name inList next = bimap InList ProjectsList $ _transfer ((== name) . inItemName) _inItemToProject (unInList inList) (unProjectsList next)
 
+inItemToSomeDay :: Text -> InList -> SomeDayList -> (InList, SomeDayList)
+inItemToSomeDay name inList next = bimap InList SomeDayList $ _transfer ((== name) . inItemName) _inItemToSomeDay (unInList inList) (unSomeDayList next)
+
 _inItemToAction :: InItem -> Action
 _inItemToAction (InItem i n) = Action i n
 
@@ -103,6 +124,9 @@ _inItemToDelegatedAction delegate day (InItem i n) = DelegatedAction i n delegat
 
 _inItemToProject :: InItem -> Project
 _inItemToProject (InItem i n) = Project i n
+
+_inItemToSomeDay :: InItem -> SomeDay
+_inItemToSomeDay (InItem i n) = SomeDay i n
 
 _transfer :: (Ord b) => (a -> Bool) -> (a -> b) -> Set a -> Set b -> (Set a, Set b)
 _transfer p f as bs = (S.filter (not . p) as, S.union bs (S.map f (S.filter p as)))

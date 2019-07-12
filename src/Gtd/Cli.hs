@@ -28,6 +28,7 @@ data Opts
     | Next
     | Waiting
     | Projects
+    | Maybe
     deriving (Data, Typeable, Show, Eq)
 
 in_ :: Opts
@@ -41,6 +42,9 @@ in_ = In
 projects_ :: Opts
 projects_ = Projects &= help "Browse your \"projects\" list"
 
+maybe_ :: Opts
+maybe_ = Maybe &= help "Browse your \"some day / maybe\" list"
+
 next_ :: Opts
 next_ = Next &= help "Browse your \"next actions\" list"
 
@@ -50,7 +54,7 @@ waiting_ = Waiting &= help "Browse your \"waiting for\" list"
 defaultMain :: IO ()
 defaultMain = do
     opts <- cmdArgs $
-        modes [in_, projects_, next_, waiting_]
+        modes [in_, projects_, next_, waiting_, maybe_]
         &= help "Getting things done"
         &= program "gtd"
         &= summary "Gtd v1.0"
@@ -62,6 +66,7 @@ defaultMain = do
         In items _ True _ -> renameInInList c items
         In items _ _ _ -> addToInList c items
         Projects -> showProjects c
+        Maybe -> showSomeDay c
         Next -> showNext c
         Waiting -> showWaiting c
 
@@ -70,6 +75,9 @@ showInList c = getInItems c >>= mapM_ (TIO.putStrLn . inItemName) . sort
 
 showProjects :: (IConnection c) => c -> IO ()
 showProjects c = getProjects c >>= mapM_ (TIO.putStrLn . projectName) . sort
+
+showSomeDay :: (IConnection c) => c -> IO ()
+showSomeDay c = getSomeDays c >>= mapM_ (TIO.putStrLn . someDayName) . sort
 
 showNext :: (IConnection c) => c -> IO ()
 showNext c = getActions c >>= mapM_ (TIO.putStrLn . actionName) . sort
@@ -122,7 +130,7 @@ data ProcessInListOption
     | NextAction
     | MakeProject
     | Delegate
-    | SomeDay
+    | DoSomeDay
     | Incubate
     | Trash
     | Quit
@@ -132,6 +140,7 @@ data InListProcessState = InListProcessState
     , inProcessInList :: !InList
     , inProcessNextActions :: !NextActionsList
     , inProcessProjects :: !ProjectsList
+    , inProcessSomeDay :: !SomeDayList
     , inProcessWaitingFor :: !WaitingForList
     }
     deriving (Show)
@@ -153,12 +162,14 @@ processInList c = do
         <$> fmap inListfromList (getInItems c)
         <*> fmap nextActionsfromList (getActions c)
         <*> fmap projectsfromList (getProjects c)
+        <*> fmap someDayfromList (getSomeDays c)
         <*> fmap waitingForfromList (getDelegatedActions c)
 
     commitState initialState state = do
         forM_ (deleted initialState state inListToList inProcessInList) $ deleteInItem c
         forM_ (added initialState state nextActionsToList inProcessNextActions) $ addAction c
         forM_ (added initialState state waitingForToList inProcessWaitingFor) $ addDelegatedAction c
+        forM_ (added initialState state someDayToList inProcessSomeDay) $ addSomeDay c
         forM_ (added initialState state projectsToList inProcessProjects) $ addProject c
         commit c
     
@@ -203,7 +214,7 @@ processInItem item = do
     parseChoice 2 = Just NextAction
     parseChoice 3 = Just MakeProject
     parseChoice 4 = Just Delegate
-    parseChoice 5 = Just SomeDay
+    parseChoice 5 = Just DoSomeDay
     parseChoice 6 = Just Incubate
     parseChoice 7 = Just Trash
     parseChoice 8 = Just Quit
@@ -232,7 +243,9 @@ processInItem item = do
             let (inList', waitingFor) = delegateInItem (inItemName item) delegate day (inProcessInList s) (inProcessWaitingFor s)
             in s { inProcessInList = inList', inProcessWaitingFor = waitingFor }
     
-    handleChoice SomeDay = pure ()
+    handleChoice DoSomeDay = modify $ \s ->
+        let (inList', someDay') = inItemToSomeDay (inItemName item) (inProcessInList s) (inProcessSomeDay s)
+        in s { inProcessInList = inList', inProcessSomeDay = someDay' }
     handleChoice Incubate = pure ()
     handleChoice Trash = modify $ \s -> s { inProcessInList = doInItem (inItemName item) $ inProcessInList s }
     handleChoice Quit = modify $ \s -> s { inProcessContinue = False }

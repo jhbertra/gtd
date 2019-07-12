@@ -3,11 +3,13 @@ module Gtd.Database
     , addDelegatedAction
     , addInItem
     , addProject
+    , addSomeDay
     , connect
     , deleteAction
     , deleteDelegatedAction
     , deleteInItem
     , deleteProject
+    , deleteSomeDay
     , getAction
     , getActions
     , getDelegatedAction
@@ -16,10 +18,13 @@ module Gtd.Database
     , getInItems
     , getProject
     , getProjects
+    , getSomeDay
+    , getSomeDays
     , updateAction
     , updateDelegatedAction
     , updateInItem
     , updateProject
+    , updateSomeDay
     ) where
 
 import Control.Monad (unless)
@@ -83,6 +88,15 @@ prepareDb c = do
             \   )"
             []
         pure ()
+    unless ("SomeDay" `elem` tables) $ do
+        _ <- run
+            c
+            "CREATE TABLE SomeDay\n\
+            \   ( Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT\n\
+            \   , Name TEXT NOT NULL UNIQUE\n\
+            \   )"
+            []
+        pure ()
     commit c
 
 -- CREATE
@@ -122,6 +136,15 @@ addProject c (Project _ name) =
         case r of
             [[actionId]] -> pure $ Project (fromSql actionId) name
             x -> fail $ "addProject: unexpected SQL query result: " ++ show x
+
+addSomeDay ::  (IConnection c) => c -> SomeDay -> IO SomeDay
+addSomeDay c (SomeDay _ name) =
+    handleSql (handleError "addSomeDay") $ do
+        _ <- run c "INSERT INTO SomeDay (Name) VALUES (?)" [toSql name]
+        r <- quickQuery' c "SELECT Id FROM SomeDay WHERE Name = ?" [toSql name]
+        case r of
+            [[actionId]] -> pure $ SomeDay (fromSql actionId) name
+            x -> fail $ "addSomeDay: unexpected SQL query result: " ++ show x
 
 -- READ
 
@@ -185,6 +208,20 @@ getProjects = getAll "getProjects" mapProject
     \   Name\n\
     \FROM Project\n"
 
+getSomeDay ::  (IConnection c) => c -> Text -> IO (Maybe SomeDay)
+getSomeDay = getOne "getSomeDay" mapSomeDay
+    "SELECT\n\
+    \   Id,\n\
+    \   Name\n\
+    \FROM SomeDay\n"
+
+getSomeDays ::  (IConnection c) => c -> IO [SomeDay]
+getSomeDays = getAll "getSomeDays" mapSomeDay
+    "SELECT\n\
+    \   Id,\n\
+    \   Name\n\
+    \FROM SomeDay\n"
+
 -- UPDATE
 
 updateInItem ::  (IConnection c) => c -> InItem -> IO ()
@@ -206,9 +243,15 @@ updateDelegatedAction c (DelegatedAction actionId name delegate date) =
         >> pure ()
 
 updateProject ::  (IConnection c) => c -> Project -> IO ()
-updateProject c (Project actionId name) =
+updateProject c (Project projectId name) =
     handleSql (handleError "updateProject") $
-        run c "UPDATE Project SET Name = ? WHERE Id = ?" [toSql name, toSql actionId]
+        run c "UPDATE Project SET Name = ? WHERE Id = ?" [toSql name, toSql projectId]
+        >> pure ()
+
+updateSomeDay ::  (IConnection c) => c -> SomeDay -> IO ()
+updateSomeDay c (SomeDay someDayId name) =
+    handleSql (handleError "updateSomeDay") $
+        run c "UPDATE SomeDay SET Name = ? WHERE Id = ?" [toSql name, toSql someDayId]
         >> pure ()
 
 -- DELETE
@@ -232,9 +275,15 @@ deleteDelegatedAction c (DelegatedAction actionId _ _ _) =
         >> pure ()
 
 deleteProject ::  (IConnection c) => c -> Project -> IO ()
-deleteProject c (Project actionId _) =
+deleteProject c (Project projectId _) =
     handleSql (handleError "deleteProject") $
-        run c "DELETE FROM Project WHERE Id = ?" [toSql actionId]
+        run c "DELETE FROM Project WHERE Id = ?" [toSql projectId]
+        >> pure ()
+
+deleteSomeDay ::  (IConnection c) => c -> SomeDay -> IO ()
+deleteSomeDay c (SomeDay someDayId _) =
+    handleSql (handleError "deleteSomeDay") $
+        run c "DELETE FROM SomeDay WHERE Id = ?" [toSql someDayId]
         >> pure ()
 
 mapInItem :: [SqlValue] -> InItem
@@ -253,6 +302,10 @@ mapDelegatedAction x = error $ "mapDelegatedAction: wrong column count: " ++ sho
 mapProject :: [SqlValue] -> Project
 mapProject [projectId, projectName] = Project (fromSql projectId) (fromSql projectName)
 mapProject x = error $ "mapProject: wrong column count: " ++ show (length x)
+
+mapSomeDay :: [SqlValue] -> SomeDay
+mapSomeDay [someDayId, someDayName] = SomeDay (fromSql someDayId) (fromSql someDayName)
+mapSomeDay x = error $ "mapSomeDay: wrong column count: " ++ show (length x)
 
 handleError :: String -> SqlError -> IO a
 handleError name e = fail $ name ++ ": SQL error: " ++ show e
